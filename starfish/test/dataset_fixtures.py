@@ -61,19 +61,24 @@ def small_intensity_table():
         [[1, 0],
          [0, 1]],
         [[0, 0],
-         [1, 1]]
+         [1, 1]],
+        [[0.5, 0.5],  # this one should fail decoding
+         [0.5, 0.5]],
+        [[0.1, 0],
+         [0, 0.1]],  # this one is a candidate for intensity filtering
     ])
 
     spot_attributes = dataframe_to_multiindex(pd.DataFrame(
         data={
-            IntensityTable.SpotAttributes.X: [0, 1, 2],
-            IntensityTable.SpotAttributes.Y: [3, 4, 5],
-            IntensityTable.SpotAttributes.Z: [0, 0, 0],
-            IntensityTable.SpotAttributes.RADIUS: [0.1, 0.2, 0.3]
+            IntensityTable.SpotAttributes.X: [0, 1, 2, 3, 4],
+            IntensityTable.SpotAttributes.Y: [3, 4, 5, 6, 7],
+            IntensityTable.SpotAttributes.Z: [0, 0, 0, 0, 0],
+            IntensityTable.SpotAttributes.RADIUS: [0.1, 2, 3, 2, 1]
         }
     ))
+    image_shape = (3, 2, 2)
 
-    return IntensityTable.from_spot_data(intensities, spot_attributes)
+    return IntensityTable.from_spot_data(intensities, spot_attributes, image_shape)
 
 
 @pytest.fixture(scope='module')
@@ -122,7 +127,7 @@ def loaded_codebook(simple_codebook_json):
 
 @pytest.fixture(scope='function')
 def euclidean_decoded_intensities(small_intensity_table, loaded_codebook):
-    decoded_intensities = loaded_codebook.decode_euclidean(small_intensity_table)
+    decoded_intensities = loaded_codebook.decode_euclidean(small_intensity_table, max_distance=0)
     return decoded_intensities
 
 
@@ -176,7 +181,7 @@ def synthetic_dataset_with_truth_values_and_called_spots(
     intensities = gsd.find(hybridization_image=filtered)
     assert intensities.shape[0] == 5
 
-    codebook.decode_euclidean(intensities)
+    codebook.decode_euclidean(intensities, max_distance=1)
 
     return codebook, true_intensities, image, intensities
 
@@ -237,3 +242,14 @@ def synthetic_spot_pass_through_stack(synthetic_dataset_with_truth_values):
         point_spread_function=(0, 0, 0), camera_detection_efficiency=1.0,
         background_electrons=0, graylevel=1)
     return codebook, true_intensities, img_stack
+
+
+@pytest.fixture()
+def single_synthetic_spot():
+    sd = synthesize.SyntheticData(
+        n_hyb=2, n_ch=2, n_z=2, height=20, width=30, n_codes=1, n_spots=1
+    )
+    codebook = sd.codebook()
+    intensities = sd.intensities(codebook)
+    image = sd.spots(intensities)
+    return codebook, intensities, image
