@@ -4,6 +4,7 @@ import argparse
 import cProfile
 from pstats import Stats
 
+from .orgjson import OrgJsonCommand
 from .pipeline.features.spots.decoder import Decoder
 from .pipeline.features.spots.detector import SpotFinder
 from .pipeline.filter import Filter
@@ -32,6 +33,8 @@ def build_parser():
     show_group.add_argument("in_json", type=FsExistsType())
     show_group.add_argument("--sz", default=10, type=int, help="Figure size")
     show_group.set_defaults(starfish_command=show)
+
+    OrgJsonCommand.add_to_parser(subparsers)
 
     return parser
 
