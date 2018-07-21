@@ -287,7 +287,3 @@ class IntensityTable(xr.DataArray):
         """return the indices of features whose radii are smaller than size_threshold"""
         mask = np.where(self.coords.features[self.SpotAttributes.RADIUS.value] < size_threshold)[0]
         return mask
-
-    def _intensities_from_regions(self, props, reduce_op='max') -> "IntensityTable":
-        """turn regions back into intensities by reducing over the labeled area"""
-        raise NotImplementedError
