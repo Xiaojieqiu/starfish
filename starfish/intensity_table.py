@@ -276,3 +276,18 @@ class IntensityTable(xr.DataArray):
         intensities[cls.Constants.GENE.value] = ('features', genes)
 
         return intensities
+
+    def mask_low_intensity_features(self, intensity_threshold):
+        """return the indices of features that have average intensity below intensity_threshold"""
+        mask = np.where(
+            self.mean([Indices.CH.value, Indices.HYB.value]).values < intensity_threshold)[0]
+        return mask
+
+    def mask_small_features(self, size_threshold):
+        """return the indices of features whose radii are smaller than size_threshold"""
+        mask = np.where(self.coords.features[self.SpotAttributes.RADIUS.value] < size_threshold)[0]
+        return mask
+
+    def _intensities_from_regions(self, props, reduce_op='max') -> "IntensityTable":
+        """turn regions back into intensities by reducing over the labeled area"""
+        raise NotImplementedError
