@@ -17,7 +17,6 @@ import time
 import numpy as np
 import pandas as pd 
 import matplotlib.pyplot as plt
-import seaborn as sns
 from scipy.stats import scoreatpercentile
 
 from showit import image, tile
@@ -31,7 +30,7 @@ from starfish.viz import tile_lims
 # EPY: START code
 # load the data from cloudfront
 s = Stack()
-s.read('https://dmf0bdeheu4zf.cloudfront.net/MERFISH/fov_001/experiment.json')
+s.read('https://dmf0bdeheu4zf.cloudfront.net/20180710/MERFISH/fov_001/experiment.json')
 # EPY: END code
 
 # EPY: START code
@@ -45,7 +44,7 @@ tile(s.image.squeeze());
 
 # EPY: START code
 # show all hybridization rounds of channel 0
-s.image.show_stack({Indices.CH: 0})
+s.image.show_stack({Indices.CH.value: 0}, rescale=False)
 # EPY: END code
 
 # EPY: START markdown
@@ -72,8 +71,9 @@ pp.pprint(s.org)
 # EPY: END markdown
 
 # EPY: START code
-codebook = pd.read_csv('https://dmf0bdeheu4zf.cloudfront.net/MERFISH/codebook.csv', dtype={'barcode': object})
-codebook.head(20)
+from starfish.codebook import Codebook
+codebook = Codebook.from_json('https://dmf0bdeheu4zf.cloudfront.net/20180710/MERFISH/codebook.json')
+codebook
 # EPY: END code
 
 # EPY: START markdown
@@ -93,8 +93,8 @@ from starfish.viz import tile_lims
 
 # EPY: START code
 from starfish.pipeline.filter.gaussian_high_pass import GaussianHighPass
-ghp = GaussianHighPass(sigma=3)
-ghp.filter(s)
+ghp = GaussianHighPass(sigma=3, verbose=True)
+ghp.filter(s.image)
 # EPY: END code
 
 # EPY: START markdown
@@ -103,8 +103,8 @@ ghp.filter(s)
 
 # EPY: START code
 from starfish.pipeline.filter.richardson_lucy_deconvolution import DeconvolvePSF
-dpsf = DeconvolvePSF(num_iter=15, sigma=2)
-dpsf.filter(s)
+dpsf = DeconvolvePSF(num_iter=15, sigma=2, verbose=True)
+dpsf.filter(s.image)
 # EPY: END code
 
 # EPY: START markdown
@@ -115,8 +115,8 @@ dpsf.filter(s)
 
 # EPY: START code
 from starfish.pipeline.filter.gaussian_low_pass import GaussianLowPass
-glp = GaussianLowPass(sigma=1)
-glp.filter(s)
+glp = GaussianLowPass(sigma=1, verbose=True)
+glp.filter(s.image)
 # EPY: END code
 
 # EPY: START markdown
@@ -133,7 +133,7 @@ scale_factors = {(t[Indices.HYB], t[Indices.CH]): t['scale_factor'] for index, t
 
 for indices in s.image._iter_indices():
     data = s.image.get_slice(indices)[0]
-    scaled = data / scale_factors[indices[Indices.HYB], indices[Indices.CH]]
+    scaled = data / scale_factors[indices[Indices.HYB.value], indices[Indices.CH.value]]
     s.image.set_slice(indices, scaled)
 # EPY: END code
 
@@ -142,7 +142,7 @@ from scipy.stats import scoreatpercentile
 # EPY: END code
 
 # EPY: START code
-mp = s.image.max_proj(Indices.HYB, Indices.CH, Indices.Z)
+mp = s.image.max_proj(Indices.HYB.value, Indices.CH.value, Indices.Z.value)
 clim = scoreatpercentile(mp, [0.5, 99.5])
 image(mp, clim=clim)
 # EPY: END code
@@ -184,41 +184,15 @@ image(mp, clim=clim)
 # EPY: START code
 from starfish.pipeline.features.pixels.pixel_spot_detector import PixelSpotDetector
 psd = PixelSpotDetector(
-    codebook='https://s3.amazonaws.com/czi.starfish.data.public/MERFISH/codebook.csv',
+    codebook=codebook,
     distance_threshold=0.5176,
     magnitude_threshold=1,
     area_threshold=2,
-    crop_size=40
+    crop_size=(0, 40, 40)
 )
 
-spot_attributes, decoded = psd.find(s)
-# EPY: END code
-
-# EPY: START code
-spot_attributes.head()
-# EPY: END code
-
-# EPY: START code
-res = decoded.result  # this should be consistent across assays; 
-# this one doesn't have a quality, but it should eventually converge to a shared type
-res.head()
-# EPY: END code
-
-# EPY: START markdown
-# In the above method, the private method of the decoder is used, which exposes additional metadata about the spots. 
-# EPY: END markdown
-
-# EPY: START code
-print('Additional metadata:')
-[f for f in dir(decoded) if not f.startswith('_')]
-# EPY: END code
-
-# EPY: START markdown
-# Spot attributes are stored as skimage RegionProperties attributes
-# EPY: END markdown
-
-# EPY: START code
-decoded.spot_props[:3]
+spot_intensities, region_properties, label_image, intensity_image, decoded_image = psd.find(s.image)
+spot_intensities
 # EPY: END code
 
 # EPY: START markdown
@@ -230,27 +204,26 @@ decoded.spot_props[:3]
 # EPY: END markdown
 
 # EPY: START code
-sns.set_context('talk')
-sns.set_style('ticks')
-
 bench = pd.read_csv('https://dmf0bdeheu4zf.cloudfront.net/MERFISH/benchmark_results.csv', 
                     dtype = {'barcode':object})
-x_cnts = res.groupby('gene').count()['area']
-y_cnts = bench.groupby('gene').count()['area']
-tmp = pd.concat([x_cnts, y_cnts], axis=1, join='inner').values
-r = np.corrcoef(tmp[:,1], tmp[:,0])[0,1]
 
+benchmark_counts = bench.groupby('gene')['gene'].count()
+genes, counts = np.unique(spot_intensities.gene_name, return_counts=True)
+result_counts = pd.Series(counts, index=genes)
+
+tmp = pd.concat([result_counts, benchmark_counts], join='inner', axis=1).values
+
+r = np.corrcoef(tmp[:,1], tmp[:,0])[0,1]
 x = np.linspace(50, 2000)
-plt.scatter(tmp[:,1],tmp[:,0], 50,zorder=2)
-plt.plot(x,x,'-k',zorder=1)
+f, ax = plt.subplots(figsize=(6, 6))
+ax.scatter(tmp[:,1],tmp[:,0], 50,zorder=2)
+ax.plot(x,x,'-k',zorder=1)
 
 plt.xlabel('Gene copy number Benchmark')
 plt.ylabel('Gene copy number Starfish')
 plt.xscale('log')
 plt.yscale('log')
-plt.title('r = {}'.format(r))
-
-sns.despine(offset=2)
+plt.title('r = {}'.format(r));
 # EPY: END code
 
 # EPY: START markdown
@@ -260,9 +233,8 @@ sns.despine(offset=2)
 # EPY: END markdown
 
 # EPY: START code
-props = decoded.spot_props
-area_lookup = lambda x: 0 if x == 0 else props[x-1].area
+area_lookup = lambda x: 0 if x == 0 else region_properties[x - 1].area
 vfunc = np.vectorize(area_lookup)
-mask = vfunc(decoded.label_img)
-image((decoded.decoded_img*(mask > 2))[200:500,200:500], cmap = 'nipy_spectral', size=10)
+mask = np.squeeze(vfunc(label_image))
+image((np.squeeze(decoded_image)*(mask > 2)), cmap = 'nipy_spectral', size=10)
 # EPY: END code
