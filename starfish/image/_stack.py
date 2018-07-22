@@ -15,7 +15,7 @@ from slicedimage import Reader, Writer, TileSet, Tile
 from slicedimage.io import resolve_path_or_url
 from tqdm import tqdm
 
-from starfish.constants import Coordinates, Indices
+from starfish.constants import Coordinates, Indices, Features
 from starfish.errors import DataFormatWarning
 from starfish.pipeline.features.spot_attributes import SpotAttributes
 from starfish.intensity_table import IntensityTable
@@ -45,7 +45,7 @@ class ImageStack:
     """
 
     AXES_MAP = {
-        Indices.HYB: 0,
+        Indices.ROUND: 0,
         Indices.CH: 1,
         Indices.Z: 2,
     }
@@ -53,7 +53,7 @@ class ImageStack:
 
     def __init__(self, image_partition):
         self._image_partition = image_partition
-        self._num_hybs = image_partition.get_dimension_shape(Indices.HYB)
+        self._num_hybs = image_partition.get_dimension_shape(Indices.ROUND)
         self._num_chs = image_partition.get_dimension_shape(Indices.CH)
         if Indices.Z in image_partition.dimensions:
             self._num_zlayers = image_partition.get_dimension_shape(Indices.Z)
@@ -88,7 +88,7 @@ class ImageStack:
 
         # iterate through the tiles and set the data.
         for tile in self._image_partition.tiles():
-            h = tile.indices[Indices.HYB]
+            h = tile.indices[Indices.ROUND]
             c = tile.indices[Indices.CH]
             zlayer = tile.indices.get(Indices.Z, 0)
             data = tile.numpy_array
@@ -100,10 +100,10 @@ class ImageStack:
                     data = data * (dst_range / src_range)
                 warnings.warn(
                     f"Tile "
-                    f"(H: {tile.indices[Indices.HYB]} C: {tile.indices[Indices.CH]} Z: {tile.indices[Indices.Z]}) has "
+                    f"(H: {tile.indices[Indices.ROUND]} C: {tile.indices[Indices.CH]} Z: {tile.indices[Indices.Z]}) has "
                     f"dtype {data.dtype}.  One or more tiles is of a larger dtype {self._data.dtype}.",
                     DataFormatWarning)
-            self.set_slice(indices={Indices.HYB: h, Indices.CH: c, Indices.Z: zlayer}, data=data)
+            self.set_slice(indices={Indices.ROUND: h, Indices.CH: c, Indices.Z: zlayer}, data=data)
         # set_slice will mark the data as needing writeback, so we need to unset that.
         self._data_needs_writeback = False
 
@@ -433,13 +433,13 @@ class ImageStack:
             Mapping of dimension name to index
 
         """
-        for hyb in np.arange(self.shape[Indices.HYB]):
+        for hyb in np.arange(self.shape[Indices.ROUND]):
             for ch in np.arange(self.shape[Indices.CH]):
                 if is_volume:
-                    yield {Indices.HYB: hyb, Indices.CH: ch}
+                    yield {Indices.ROUND: hyb, Indices.CH: ch}
                 else:
                     for z in np.arange(self.shape[Indices.Z]):
-                        yield {Indices.HYB: hyb, Indices.CH: ch, Indices.Z: z}
+                        yield {Indices.ROUND: hyb, Indices.CH: ch, Indices.Z: z}
 
     def _iter_tiles(
             self, indices: Iterable[Mapping[Indices, Union[int, slice]]]
@@ -573,7 +573,7 @@ class ImageStack:
                 data[k].append(tile.extras.get(k, None))
 
             if 'barcode_index' not in tile.extras:
-                hyb = tile.indices[Indices.HYB]
+                hyb = tile.indices[Indices.ROUND]
                 ch = tile.indices[Indices.CH]
                 z = tile.indices.get(Indices.Z, 0)
                 barcode_index = (((z * self.num_hybs) + hyb) * self.num_chs) + ch
@@ -644,10 +644,10 @@ class ImageStack:
         """
         if self._data_needs_writeback:
             for tile in self._image_partition.tiles():
-                h = tile.indices[Indices.HYB]
+                h = tile.indices[Indices.ROUND]
                 c = tile.indices[Indices.CH]
                 zlayer = tile.indices.get(Indices.Z, 0)
-                tile.numpy_array, axes = self.get_slice(indices={Indices.HYB: h, Indices.CH: c, Indices.Z: zlayer})
+                tile.numpy_array, axes = self.get_slice(indices={Indices.ROUND: h, Indices.CH: c, Indices.Z: zlayer})
                 assert len(axes) == 0
             self._data_needs_writeback = False
 
@@ -687,7 +687,7 @@ class ImageStack:
                         xval,
                         yval,
                         zstr,
-                        tile.indices[Indices.HYB],
+                        tile.indices[Indices.ROUND],
                         tile.indices[Indices.CH],
                         ext,
                     ),
@@ -768,9 +768,9 @@ class ImageStack:
             tile_extras_provider = cls._default_tile_extras_provider
 
         img = TileSet(
-            {Coordinates.X, Coordinates.Y, Indices.HYB, Indices.CH, Indices.Z},
+            {Coordinates.X, Coordinates.Y, Indices.ROUND, Indices.CH, Indices.Z},
             {
-                Indices.HYB: num_hyb,
+                Indices.ROUND: num_hyb,
                 Indices.CH: num_ch,
                 Indices.Z: num_z,
             },
@@ -786,7 +786,7 @@ class ImageStack:
                             Coordinates.Z: (0.0, 0.001),
                         },
                         {
-                            Indices.HYB: hyb,
+                            Indices.ROUND: hyb,
                             Indices.CH: ch,
                             Indices.Z: z,
                         },
@@ -857,18 +857,18 @@ class ImageStack:
             raise ValueError('value exceeds dynamic range of largest skimage-supported type')
 
         # make sure requested dimensions are large enough to support intensity values
-        indices = zip((Indices.Z, Coordinates.Y, Coordinates.X), (num_z, height, width))
+        indices = zip((Features.Z, Features.Y, Features.X), (num_z, height, width))
         for index, requested_size in indices:
-            required_size = intensities.coords[index.value].values.max()
+            required_size = intensities.coords[index].values.max()
             if required_size > requested_size:
                 raise ValueError(
                     f'locations of intensities contained in table exceed the size of requested '
-                    f'dimension {index.value}. Required size {required_size} > {requested_size}.')
+                    f'dimension {index}. Required size {required_size} > {requested_size}.')
 
         # create an empty array of the correct size
         image = np.zeros(
             (
-                intensities.sizes[Indices.HYB.value],
+                intensities.sizes[Indices.ROUND.value],
                 intensities.sizes[Indices.CH.value],
                 num_z,
                 height,
@@ -958,7 +958,7 @@ class ImageStack:
             for c in np.arange(n_ch):
                 for z in np.arange(n_z):
                     view = array[h, c, z]
-                    empty.set_slice({Indices.HYB: h, Indices.CH: c, Indices.Z: z}, view)
+                    empty.set_slice({Indices.ROUND: h, Indices.CH: c, Indices.Z: z}, view)
 
         return empty
 
@@ -975,9 +975,9 @@ class ImageStack:
 
         """
         zmin, ymin, xmin = crop
-        zmax = self.shape['z'] - zmin
-        ymax = self.shape['y'] - ymin
-        xmax = self.shape['x'] - xmin
+        zmax = self.shape[Features.Z] - zmin
+        ymax = self.shape[Features.Y] - ymin
+        xmax = self.shape[Features.X] - xmin
         data = self.numpy_array.transpose(2, 3, 4, 1, 0)  # (z, y, x, ch, hyb)
         cropped_data = data[zmin:zmax, ymin:ymax, xmin:xmax, :, :]
         intensity_data = cropped_data.reshape(-1, self.num_chs, self.num_hybs)  # (pixels, ch, hyb)
@@ -987,9 +987,10 @@ class ImageStack:
 
         pixel_coordinates = pd.DataFrame(
             data=np.array(list(product(z, y, x))),
-            columns=['z', 'y', 'x']
+            columns=[Features.Z, Features.Y, Features.X]
         )
-        pixel_coordinates['r'] = np.full(pixel_coordinates.shape[0], fill_value=np.nan)
+        pixel_coordinates[Features.SPOT_RADIUS] = np.full(
+            pixel_coordinates.shape[0], fill_value=np.nan)
 
         spot_attributes = dataframe_to_multiindex(pixel_coordinates)
         image_size = cropped_data.shape[:3]
@@ -1027,9 +1028,9 @@ class ImageStack:
 
             # reverses the process used to produce the intensity table in to_pixel_intensities
             data = intensities.values.reshape([
-                *intensities.attrs['image_shape'],
+                *intensities.attrs[IntensityTable.IMAGE_SHAPE],
                 intensities.sizes[Indices.CH],
-                intensities.sizes[Indices.HYB]])
+                intensities.sizes[Indices.ROUND]])
             data = data.transpose(4, 3, 0, 1, 2)
             return ImageStack.from_numpy_array(data)
 
@@ -1046,6 +1047,6 @@ class ImageStack:
             # coordinates = self.indexes['features'].to_frame()[['z', 'y', 'x']]
             # genes = self.gene_name.values
             #
-            # for i in np.arange(self.sizes[self.Constants.FEATURES.value]):
+            # for i in np.arange(self.sizes[self.Constants.Features.value]):
             #     z, y, x = coordinates.iloc[i]
             #     decoded_image[z, y, x] = self._gene_to_int[genes[i]]

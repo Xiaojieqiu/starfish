@@ -119,14 +119,14 @@ class Stack:
             # numpy array, which we probably should.
             tileset = TileSet(
                 {
-                    Indices.HYB,
+                    Indices.ROUND,
                     Indices.CH,
                     Indices.Z,
                     Coordinates.X,
                     Coordinates.Y,
                 },
                 {
-                    Indices.HYB: 1,
+                    Indices.ROUND: 1,
                     Indices.CH: 1,
                     Indices.Z: 1,
                 }
@@ -137,7 +137,7 @@ class Stack:
                     Coordinates.Y: (0.000, 0.001),
                 },
                 {
-                    Indices.HYB: 0,
+                    Indices.ROUND: 0,
                     Indices.CH: 0,
                     Indices.Z: 0,
                 },
