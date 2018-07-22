@@ -147,4 +147,4 @@ def test_unit_normalize():
     )
 
     results = Codebook._unit_normalize(simple_xarray)
-    assert np.array_equal(results.sum(['c', 'h']), np.ones(3))
+    assert np.array_equal(results.sum([Indices.CH.value, Indices.ROUND.value]), np.ones(3))
