@@ -504,14 +504,14 @@ class ImageStack:
 
         return self
 
-    def transform(self, func, is_volume=False, verbose=False, **kwargs) -> List[Any]:
+    def transform(self, func: Callable, is_volume=False, verbose=False, **kwargs) -> List[Any]:
         """Apply func over all tiles or volumes in self
 
         Parameters
         ----------
         func : Callable
-            Function to apply. must expect a first argument which is a 2d or 3d numpy array (see is_volume) but
-            may return any object type
+            Function to apply. must expect a first argument which is a 2d or 3d numpy array
+            (see is_volume) but may return any object type
         is_volume : bool
             (default False) If True, pass 3d volumes (x, y, z) to func
         verbose : bool

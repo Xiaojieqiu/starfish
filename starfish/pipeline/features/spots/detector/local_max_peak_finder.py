@@ -1,10 +1,9 @@
-from typing import List
-
 import numpy as np
+import pandas as pd
 from trackpy import locate
 
 from starfish.image import ImageStack
-from starfish.pipeline.features.spot_attributes import SpotAttributes
+from starfish.intensity_table import IntensityTable
 from ._base import SpotFinderAlgorithmBase
 
 
@@ -71,12 +70,7 @@ class LocalMaxPeakFinder(SpotFinderAlgorithmBase):
         self.is_volume = is_volume
         self.verbose = verbose
 
-    # # TODO ambrosejcarr: make this generalize to smFISH methods
-    # def encode(self, spot_attributes: SpotAttributes):
-    #     spot_table = spot_attributes.data
-    #     spot_table['barcode_index'] = np.ones(spot_table.shape[0])
-
-    def find_attributes(self, image: np.ndarray) -> SpotAttributes:
+    def find_attributes(self, image: np.ndarray) -> pd.DataFrame:
         """
 
         Parameters
@@ -110,9 +104,10 @@ class LocalMaxPeakFinder(SpotFinderAlgorithmBase):
             attributes.columns = new_colnames
 
         attributes['spot_id'] = np.arange(attributes.shape[0])
-        return SpotAttributes(attributes)
+        return attributes
+        # return SpotAttributes(attributes)
 
-    def find(self, stack: ImageStack):
+    def find(self, stack: ImageStack) -> IntensityTable:
         """
         Find spots.
 
@@ -121,17 +116,11 @@ class LocalMaxPeakFinder(SpotFinderAlgorithmBase):
         stack : ImageStack
             Stack where we find the spots in.
         """
-        spot_attributes: List[SpotAttributes] = stack.transform(
+        # precreate the IntensityTable
+        results = stack.transform(
             self.find_attributes, is_volume=self.is_volume, verbose=self.verbose)
 
-        # TODO ambrosejcarr: do we need to find spots in the aux_dict too?
-
-        # TODO ambrosejcarr: this is where development stopped; spot_attributes is correct, but translating
-        # spot_attributes into an encoder_table is tricky without first implementing the new codebook. Do that first.
-        # create an encoded table
-        # encoded_spots = self.encode(spot_attributes.data)
-
-        return spot_attributes
+        import pdb; pdb.set_trace()
 
     @classmethod
     def add_arguments(cls, group_parser):
