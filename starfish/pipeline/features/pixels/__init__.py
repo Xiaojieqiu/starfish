@@ -61,5 +61,5 @@ class PixelSpotDetector(PipelineComponent):
         pixel_attributes.save(path)
 
         path = os.path.join(args.output, 'encoder_table.json')
-        print(f"Writing | spot_id | hyb | ch | val | to: {path}")
+        print(f"Writing | spot_id | round | ch | val | to: {path}")
         encoded_pixels.save(path)
